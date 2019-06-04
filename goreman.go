@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v2"
 )
 
@@ -35,6 +34,7 @@ func usage() {
                                        restart-all
                                        list
                                        status
+									   update  #update config file	
   goreman start [PROCESS]            # Start the application
   goreman version                    # Display Goreman version
 
@@ -160,6 +160,59 @@ func readProcfile(cfg *config) error {
 	return nil
 }
 
+func UpdateProcFile()  error {
+	cfg := readConfig()
+
+	if cfg.BaseDir != "" {
+		err := os.Chdir(cfg.BaseDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "goreman basedir: %s\n", err.Error())
+			os.Exit(1)
+		}
+	}
+
+	content, err := ioutil.ReadFile(cfg.Procfile)
+	if err != nil {
+		return err
+	}
+	index := 0
+	for _, line := range strings.Split(string(content), "\n") {
+		tokens := strings.SplitN(line, ":", 2)
+		if len(tokens) != 2 || tokens[0][0] == '#' {
+			continue
+		}
+		k, v := strings.TrimSpace(tokens[0]), strings.TrimSpace(tokens[1])
+		if runtime.GOOS == "windows" {
+			v = re.ReplaceAllStringFunc(v, func(s string) string {
+				return "%" + s[1:] + "%"
+			})
+		}
+		_, ok := procs[k]
+		if !ok {
+			p := &procInfo{proc: k, cmdline: v, colorIndex: index}
+			if *setPorts == true {
+				p.setPort = true
+				p.port = cfg.BasePort
+				cfg.BasePort += 100
+			}
+			p.cond = sync.NewCond(&p.mu)
+			procs[k] = p
+			if len(k) > maxProcNameLength {
+				maxProcNameLength = len(k)
+			}
+			index++
+			if index >= len(colors) {
+				index = 0
+			}
+		}
+	}
+	if len(procs) == 0 {
+		return errors.New("no valid entry")
+	}
+	return nil
+
+}
+
 func defaultServer(serverPort uint) string {
 	if s, ok := os.LookupEnv("GOREMAN_RPC_SERVER"); ok {
 		return s
@@ -209,7 +262,7 @@ func start(ctx context.Context, sig <-chan os.Signal, cfg *config) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
+
 	if len(cfg.Args) > 1 {
 		tmp := make(map[string]*procInfo, len(cfg.Args[1:]))
 		maxProcNameLength = 0
@@ -225,7 +278,8 @@ func start(ctx context.Context, sig <-chan os.Signal, cfg *config) error {
 		}
 		procs = tmp
 	}
-	godotenv.Load()
+
+	ctx, cancel := context.WithCancel(ctx)
 	rpcChan := make(chan *rpcMessage, 10)
 	go startServer(ctx, rpcChan, cfg.Port)
 	procsErr := startProcs(sig, rpcChan, cfg.ExitOnError)
@@ -256,7 +310,7 @@ func main() {
 	case "run":
 		if len(cfg.Args) >= 2 {
 			cmd, args := cfg.Args[1], cfg.Args[2:]
-			err = run(cmd, args, cfg.Port)
+			err = run(cmd, args, cfg)
 		} else {
 			usage()
 		}

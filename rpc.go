@@ -130,10 +130,29 @@ func (r *Goreman) Status(args []string, ret *string) (err error) {
 	}
 	return err
 }
+// Status do status
+func (r *Goreman) Update(args []string, ret *string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	*ret = ""
+	err = UpdateProcFile()
+	if err != nil {
+		*ret += err.Error()
+	} else {
+		*ret += "Update Procs File success\n"
+	}
+
+	return err
+}
+
+
 
 // command: run.
-func run(cmd string, args []string, serverPort uint) error {
-	client, err := rpc.Dial("tcp", defaultServer(serverPort))
+func run(cmd string, args []string,  cfg *config) error {
+	client, err := rpc.Dial("tcp", defaultServer(cfg.Port))
 	if err != nil {
 		return err
 	}
@@ -156,6 +175,10 @@ func run(cmd string, args []string, serverPort uint) error {
 		return err
 	case "status":
 		err := client.Call("Goreman.Status", args, &ret)
+		fmt.Print(ret)
+		return err
+	case "update":
+		err := client.Call("Goreman.Update", args, &ret)
 		fmt.Print(ret)
 		return err
 	}

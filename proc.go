@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+
+var wg sync.WaitGroup
 // spawnProc starts the specified proc, and returns any error from running it.
 func spawnProc(proc string, errCh chan<- error) {
 	procObj := procs[proc]
@@ -40,6 +42,7 @@ func spawnProc(proc string, errCh chan<- error) {
 	procObj.mu.Lock()
 	procObj.cond.Broadcast()
 	if err != nil && procObj.stoppedBySupervisor == false {
+		fmt.Fprintf(logger, "wait procss:%s error:%v\n", proc, err)
 		select {
 		case errCh <- err:
 		default:
@@ -47,7 +50,7 @@ func spawnProc(proc string, errCh chan<- error) {
 	}
 	procObj.waitErr = err
 	procObj.cmd = nil
-	fmt.Fprintf(logger, "Terminating %s\n", proc)
+	fmt.Fprintf(logger, "Terminating-ww %s, waitErr:%v\n", proc, err)
 }
 
 // Stop the specified proc, issuing os.Kill if it does not terminate within 10
@@ -120,7 +123,7 @@ func restartProc(proc string) error {
 	}
 
 	stopProc(proc, nil)
-	return startProc(proc, nil, nil)
+	return startProc(proc, &wg, nil)
 }
 
 // stopProcs attempts to stop every running process and returns any non-nil
@@ -139,7 +142,6 @@ func stopProcs(sig os.Signal) error {
 
 // spawn all procs.
 func startProcs(sc <-chan os.Signal, rpcCh <-chan *rpcMessage, exitOnError bool) error {
-	var wg sync.WaitGroup
 	errCh := make(chan error, 1)
 
 	for proc := range procs {
@@ -169,12 +171,15 @@ func startProcs(sc <-chan os.Signal, rpcCh <-chan *rpcMessage, exitOnError bool)
 			}
 		case err := <-errCh:
 			if exitOnError {
+				fmt.Fprintf(os.Stderr, "errCh:%v\n", err)
 				stopProcs(os.Interrupt)
 				return err
 			}
 		case <-allProcsDone:
+			fmt.Fprintf(os.Stderr, "allProcsDone")
 			return stopProcs(os.Interrupt)
 		case sig := <-sc:
+			fmt.Fprintf(os.Stderr, "receive sig：%v", sig)
 			return stopProcs(sig)
 		}
 	}
