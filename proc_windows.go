@@ -1,4 +1,4 @@
-package main
+package goreman
 
 import (
 	"os"

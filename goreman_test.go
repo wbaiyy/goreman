@@ -1,4 +1,4 @@
-package main
+package goreman
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
-		code := `package main;import ("os";"strconv";"time");func main(){i,_:=strconv.ParseFloat(os.Args[1]);time.Sleep(time.Duration(i)*time.Second)}`
+		code := `package goreman;import ("os";"strconv";"time");func main(){i,_:=strconv.ParseFloat(os.Args[1]);time.Sleep(time.Duration(i)*time.Second)}`
 		dir, err := ioutil.TempDir("", "goreman-test")
 		if err != nil {
 			panic(err)

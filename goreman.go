@@ -1,4 +1,4 @@
-package main
+package goreman
 
 import (
 	"context"
@@ -287,7 +287,7 @@ func start(ctx context.Context, sig <-chan os.Signal, cfg *config) error {
 	return procsErr
 }
 
-func main() {
+func Run() {
 	var err error
 	cfg := readConfig()
 
